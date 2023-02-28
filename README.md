@@ -29,6 +29,6 @@ Look for open storage buckets and accessible files simultaneously across Amazon 
                             The max number of items to list/download from each bucket. Defaults to 100.
       --max-size MAX_SIZE   The max file size (in bytes) to download.
       --download            Attempt to download discovered files.
-
+&nbsp;
 
 ![...](https://media0.giphy.com/media/VeSvZhPrqgZxx2KpOA/giphy.gif)
