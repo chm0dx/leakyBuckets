@@ -230,11 +230,11 @@ class LeakyBuckets():
 if __name__ == "__main__":
         
     import argparse
-    parser = argparse.ArgumentParser(description = "Look for open storage buckets and accessible files simultaneously across Amazon Web Services, Google Cloud, and Microsoft Azure")
+    parser = argparse.ArgumentParser(description = "Find open storage buckets and accessible files across Amazon Web Services, Google Cloud, and Microsoft Azure simultaneously")
     parser.add_argument(
 		"--keywords",
 		required=False,
-		help="Primary keywords used to generate guesses. Can be a path to a wordlist file or comma-separated list of words."
+		help="Keywords used to generate guesses. Can be a path to a wordlist file or comma-separated list of words."
 	)
     parser.add_argument(
 		"--modifiers",
@@ -245,12 +245,12 @@ if __name__ == "__main__":
     parser.add_argument(
 		"--guesses",
 		required=False,
-		help="Manually provide guesses, foregoing automated generation. Can be a path to a wordlist file or comma-separated list of words.",
+		help="Manually provide guesses. Can be a path to a wordlist file or comma-separated list of words.",
 	)
     parser.add_argument(
 		"--az-storage-accounts",
 		required=False,
-		help="Manually provide AZ storage accounts (defaults to either keywords or guesses, whichever is passed in). Can be a path to a wordlist file or comma-separated list of words.",
+		help="Provide AZ storage accounts (defaults to either keywords or guesses, whichever is passed in). Can be a path to a wordlist file or comma-separated list of words.",
 	)
     parser.add_argument(
 		"--threads",
