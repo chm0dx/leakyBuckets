@@ -68,18 +68,13 @@ class LeakyBuckets():
         r = requests.get(f"{url}/iam/testPermissions?permissions=storage.buckets.delete&permissions=storage.buckets.get&permissions=storage.buckets.getIamPolicy&permissions=storage.buckets.setIamPolicy&permissions=storage.buckets.update&permissions=storage.objects.create&permissions=storage.objects.delete&permissions=storage.objects.get&permissions=storage.objects.list&permissions=storage.objects.update",timeout=10)
         if r.status_code == 404:
             pass
-            #print("\tGCP:\tBucket doesn't exist.")
         elif r.status_code == 403:
-            #print("\tGCP:\tThe bucket exists but you do not have access.")
-            #add_finding(guess,"GCP",url,None,"The bucket exists but you do not have access.")
             self.found_temp.append((guess,"GCP",url,[],"The bucket exists but you do not have access."))
         elif r.json().get("kind"):
             if r.json().get("permissions"):
                 perms = ", ".join([perm.split(".")[-1] for perm in r.json().get("permissions")])
                 if "list" in perms:
                     files = [(file.name,"") for file in itertools.islice(storage.Client.create_anonymous_client().bucket(guess).list_blobs(),self.max_files)]
-                #print(f"\tGCP:\tAccess! {perms}")
-                #add_finding(guess,"GCP",url,files, None)
                     self.found_temp.append((guess,"GCP",url,files, "")) if len(files) > 0 else self.found_temp.append((guess,"GCP",url,files, "The bucket exists but is empty."))
                     if self.download:
                         for file,message in files:
@@ -98,27 +93,19 @@ class LeakyBuckets():
                 elif "create" in perms:
                     self.found_temp.append((guess,"GCP",url,[], "You have permission to create in this bucket but not to view contents."))
             else:
-                #print("\tGCP:\tThe bucket exists but you do not have access.")
-                #add_finding(guess,"GCP",url,None,"The bucket exists but you do not have access.")
                 self.found_temp.append((guess,"GCP",url,[],"The bucket exists but you do not have access."))
         else:
             pass
-            #print(r.json())
 
     def guess_aws(self,guess):
         url = f"https://{guess}.s3.amazonaws.com/"
         r = requests.get(url,timeout=10)
         if r.status_code == 404:
             pass
-            #print("\tAWS:\tBucket doesn't exist.")
         elif r.status_code == 403:
-            #print("\tAWS:\tThe bucket exists but you do not have access.")
-            #add_finding(guess,"AWS",url,None,"The bucket exists but you do not have access.")
             self.found_temp.append((guess,"AWS",url,[],"The bucket exists but you do not have access."))
         elif r.status_code == 200:
             files = [(f.text,"") for f in itertools.islice(ET.fromstring(r.text).iter('{http://s3.amazonaws.com/doc/2006-03-01/}Key'),self.max_files) if not f.text.endswith("/")]
-            #print(f"\tAWS:\tAccess! {', '.join(files)}")
-            #add_finding(guess,"AWS",url,files,None)
             self.found_temp.append((guess,"AWS",url,files,"")) if len(files) > 0 else self.found_temp.append((guess,"GCP",url,files, "The bucket exists but is empty."))
             if self.download:
                 for file,message in files:
@@ -142,7 +129,6 @@ class LeakyBuckets():
                             files.insert(index,(file,f"Saved to: ./{dl_folder}/{file_name}"))
         else:
             pass
-            #print(f"\tAWS:\t{r.text}")
 
     def guess_azure(self,keyword,guess):
         url = f"https://{keyword}.blob.core.windows.net/{guess}"
@@ -150,7 +136,6 @@ class LeakyBuckets():
             r = requests.get(f"{url}?restype=container&comp=list",timeout=10)
             if r.status_code == 404:
                 pass
-                #print("\tAWS:\tBucket doesn't exist.")
             elif r.status_code == 200:
                 files = [(f.text,"") for f in itertools.islice(ET.fromstring(r.text).iter("Name"),self.max_files)]
                 self.found_temp.append((guess,"Azure",url,files,"")) if len(files) > 0 else self.found_temp.append((guess,"GCP",url,files, "The bucket exists but is empty."))
@@ -308,11 +293,7 @@ if __name__ == "__main__":
         if len(found) == 0:
             print("Didn't find anything.")
         else:
-            #print(cloudenum.found_temp)
-            #for guess,results in sorted(found.items(), key=lambda item:len(item[1][2])):
-                #print(f"\nKeyword: {guess}")
             for keyword,source,url,files,message in sorted(found,key=lambda vals: len(vals[3])):
-                #print(f"\n\t{source}\t{url}")
                 print(f"\n{url}")
                 if message:
                     print(f"\t{message}")
