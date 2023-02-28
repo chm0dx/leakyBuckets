@@ -1,6 +1,6 @@
 # leakyBuckets
 
-Look for open storage buckets and accessible files simultaneously across Amazon Web Services, Google Cloud, and Microsoft Azure
+Find open storage buckets and accessible files across Amazon Web Services, Google Cloud, and Microsoft Azure simultaneously
 
 ## Install
 
