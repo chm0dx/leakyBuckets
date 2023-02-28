@@ -245,7 +245,7 @@ class LeakyBuckets():
 if __name__ == "__main__":
         
     import argparse
-    parser = argparse.ArgumentParser(description = "Simultaneously look for open storage buckets and accessible files across Amazon Web Services, Google Cloud, and Microsoft Azure")
+    parser = argparse.ArgumentParser(description = "Look for open storage buckets and accessible files simultaneously across Amazon Web Services, Google Cloud, and Microsoft Azure")
     parser.add_argument(
 		"--keywords",
 		required=False,
