@@ -2,6 +2,8 @@
 
 Find open storage buckets and accessible files across Amazon Web Services, Google Cloud, and Microsoft Azure simultaneously
 
+![alt text](./demo.gif "Quick Demo")
+
 ## Install
 
     git clone https://github.com/chm0dx/leakyBuckets.git
@@ -9,9 +11,6 @@ Find open storage buckets and accessible files across Amazon Web Services, Googl
     pip install -r requirements.txt
 
 ## Use
-
-    usage: leakyBuckets.py [-h] [--keywords KEYWORDS] [--download] [--guesses GUESSES] [--threads THREADS] [--max-files MAX_FILES]
-                        [--max-size MAX_SIZE] [--modifiers MODIFIERS] [--direct-download DIRECT_DOWNLOAD] [--az-accounts AZ_ACCOUNTS]
 
     Find open storage buckets and accessible files across Amazon Web Services, Google Cloud, and Microsoft Azure simultaneously
 
@@ -30,6 +29,7 @@ Find open storage buckets and accessible files across Amazon Web Services, Googl
                             Provide URLs of files to download. File path or comma-separated list.
     --az-accounts AZ_ACCOUNTS
                             Provide AZ storage accounts (defaults to passed-in keywords). File path or comma-separated list.
+    --all                 Show all results, even if the bucket isn't open.
 
     Examples:
     python3 leakyBuckets.py --keywords hooli

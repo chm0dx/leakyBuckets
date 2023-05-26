@@ -70,7 +70,8 @@ class LeakyBuckets():
         if r.status_code == 404:
             pass
         elif r.status_code == 403:
-            self.found.append((url,[],"The bucket exists but you do not have access."))
+            if self.all:
+                self.found.append((url,[],"The bucket exists but you do not have access."))
         elif r.json().get("kind"):
             if r.json().get("permissions"):
                 perms = ", ".join([perm.split(".")[-1] for perm in r.json().get("permissions")])
@@ -85,9 +86,11 @@ class LeakyBuckets():
                             files.insert(index,(file,message))
                     self.found.append((url,files, "")) if len(files) > 0 else self.found.append((url,files, "The bucket exists but is empty."))
                 elif "create" in perms:
-                    self.found.append((url,[], "You have permission to create in this bucket but not to view contents."))
+                    if self.all:
+                        self.found.append((url,[], "You have permission to create in this bucket but not to view contents."))
             else:
-                self.found.append((url,[],"The bucket exists but you do not have access."))
+                if self.all:
+                    self.found.append((url,[],"The bucket exists but you do not have access."))
         else:
             pass
 
@@ -97,7 +100,8 @@ class LeakyBuckets():
         if r.status_code == 404:
             pass
         elif r.status_code == 403:
-            self.found.append((url,[],"The bucket exists but you do not have access."))
+            if self.all:
+                self.found.append((url,[],"The bucket exists but you do not have access."))
         elif r.status_code == 200:
             files = [(f.text,"") for f in itertools.islice(ET.fromstring(r.text).iter('{http://s3.amazonaws.com/doc/2006-03-01/}Key'),self.max_files) if not f.text.endswith("/")]
             if self.download:
@@ -118,7 +122,8 @@ class LeakyBuckets():
             if r.status_code == 404:
                 if keyword not in self.azure_storage_accounts:
                     self.azure_storage_accounts.append(keyword)
-                    self.found.append(("/".join(url.split("/")[:-1]),[],"The storage account exists."))
+                    if self.all:
+                        self.found.append(("/".join(url.split("/")[:-1]),[],"The storage account exists."))
             elif r.status_code == 200:
                 files = [(f.text,"") for f in itertools.islice(ET.fromstring(r.text).iter("Name"),self.max_files)]
                 if self.download:
@@ -280,7 +285,7 @@ Examples:
 		"--threads",
 		required=False,
 		help="The max number of threads to use. Defaults to 10.",
-		default=10,
+		default=100,
 		type=int
 	)
     parser.add_argument(
@@ -313,6 +318,13 @@ Examples:
 		required=False,
 		help="Provide AZ storage accounts (defaults to passed-in keywords). File path or comma-separated list.",
 	)
+    parser.add_argument(
+    "--all",
+    required=False,
+    help="Show all results, even if the bucket isn't open.",
+    action="store_true"
+	)
+    
     args = parser.parse_args()
 
     try:
