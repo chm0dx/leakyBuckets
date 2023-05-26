@@ -7,25 +7,25 @@ import xml.etree.ElementTree as ET
 from google.cloud import storage
 from queue import Queue
 
+
 class LeakyBucketsException(Exception):
     pass
+
 
 class LeakyBuckets():
 
     def __init__(self,**kwargs):
-        self.download = False
-        self.azure_smb = False
         self.queue = Queue()
         self.found = []
         self.alerts = []
         self.azure_storage_accounts = []
         self.__dict__.update(kwargs)
 
-        if not self.keywords and not self.guesses and not self.downloader:
-            self.error("Must provide one of the following: --keywords, --guesses, --downloader.")
+        if not self.keywords and not self.guesses and not self.direct_download:
+            self.error("Must provide one of the following: --keywords, --guesses, --direct-download")
         
-        if (self.keywords and self.guesses) or (self.keywords and self.downloader) or (self.guesses and self.downloader):
-            self.error("Cannot provide more than one of the following: --keywords, --guesses, --downloader.")
+        if (self.keywords and self.guesses) or (self.keywords and self.direct_download) or (self.guesses and self.direct_download):
+            self.error("Cannot provide more than one of the following: --keywords, --guesses, --direct-download")
 
         if self.keywords:
             if pathlib.Path(self.keywords).is_file():
@@ -39,12 +39,12 @@ class LeakyBuckets():
                     self.guesses = file.read().splitlines()
             else:
                 self.guesses = self.guesses.split(",")
-        elif self.downloader:
-            if pathlib.Path(self.downloader).is_file():
-                with open(self.downloader,"r") as file:
-                    self.downloader = file.read().splitlines()
+        elif self.direct_download:
+            if pathlib.Path(self.direct_download).is_file():
+                with open(self.direct_download,"r") as file:
+                    self.direct_download = file.read().splitlines()
             else:
-                self.downloader = self.downloader.split(",")  
+                self.direct_download = self.direct_download.split(",")  
 
         if self.az_accounts:
             if pathlib.Path(self.az_accounts).is_file():
@@ -80,16 +80,9 @@ class LeakyBuckets():
                         for file,message in files:
                             index = files.index((file,message))
                             files.remove((file,message))
-                            dl_folder = '/'.join(url.split("/")[2:]).replace("/","__")
-                            if dl_folder.endswith("__"):
-                                dl_folder = dl_folder[:-2]
-                            if storage.Client.create_anonymous_client().bucket(guess).get_blob(file).size > self.max_size:
-                                files.insert(index,(file,"Not saved: File larger than download limit"))
-                            else:
-                                pathlib.Path(f"./{dl_folder}").mkdir(parents=True, exist_ok=True)
-                                file_name = file.split("/")[-1]
-                                storage.Client.create_anonymous_client().bucket(guess).blob(file).download_to_filename(f"./{dl_folder}/{file_name}")
-                                files.insert(index,(file,f"Saved to: ./{dl_folder}/{file_name}"))
+                            file_url = f"{url}/{file}"
+                            (file,message) = self.download_file(file_url,url,file)
+                            files.insert(index,(file,message))
                     self.found.append((url,files, "")) if len(files) > 0 else self.found.append((url,files, "The bucket exists but is empty."))
                 elif "create" in perms:
                     self.found.append((url,[], "You have permission to create in this bucket but not to view contents."))
@@ -111,22 +104,9 @@ class LeakyBuckets():
                 for file,message in files:
                     index = files.index((file,message))
                     files.remove((file,message))
-                    dl_folder = '/'.join(url.split("/")[2:]).replace("/","__")
-                    if dl_folder.endswith("__"):
-                        dl_folder = dl_folder[:-2]
                     file_url = f"{url}{requests.utils.quote(file)}"
-                    r = requests.head(file_url)
-                    if r.status_code == 403:
-                        files.insert(index,(file,"Not authorized to access file"))
-                    elif int(r.headers["Content-Length"]) > self.max_size:
-                        files.insert(index,(file,"Not saved: File larger than download limit"))
-                    else:
-                        with requests.get(file_url, stream=True) as r:
-                            pathlib.Path(f"./{dl_folder}").mkdir(parents=True, exist_ok=True)
-                            file_name = file.split("/")[-1]
-                            with open(f"./{dl_folder}/{file_name}", 'wb') as f:
-                                shutil.copyfileobj(r.raw, f)
-                            files.insert(index,(file,f"Saved to: ./{dl_folder}/{file_name}"))
+                    (file,message) = self.download_file(file_url,url,file)
+                    files.insert(index,(file,message))
             self.found.append((url,files,"")) if len(files) > 0 else self.found.append((url,files, "The bucket exists but is empty."))
         else:
             pass
@@ -145,22 +125,9 @@ class LeakyBuckets():
                     for file,message in files:
                         index = files.index((file,message))
                         files.remove((file,message))
-                        dl_folder = '/'.join(url.split("/")[2:]).replace("/","__")
-                        if dl_folder.endswith("__"):
-                            dl_folder = dl_folder[:-2]
                         file_url = f"{url}/{requests.utils.quote(file)}"
-                        r = requests.head(file_url)
-                        if r.status_code == 403:
-                            files.insert(index,(file,"Not authorized to access file"))
-                        elif int(r.headers["Content-Length"]) > self.max_size:
-                            files.insert(index,(file,"Not saved: File larger than download limit"))
-                        else:
-                            with requests.get(file_url, stream=True) as r:
-                                pathlib.Path(f"./{dl_folder}").mkdir(parents=True, exist_ok=True)
-                                file_name = file.split("/")[-1]
-                                with open(f"./{dl_folder}/{file_name}", 'wb') as f:
-                                    shutil.copyfileobj(r.raw, f)
-                                files.insert(index,(file,f"Saved to: ./{dl_folder}/{file_name}"))
+                        (file,message) = self.download_file(file_url,url,file)
+                        files.insert(index,(file,message))
                 self.found.append((url,files,"")) if len(files) > 0 else self.found.append((url,files, "The container exists but is empty."))
         except requests.exceptions.ConnectionError:
             pass
@@ -204,7 +171,7 @@ class LeakyBuckets():
                     self.guess_aws(guess[0])
                 else:
                     self.guess_azure(guess[0],guess[1])
-            elif self.downloader:
+            elif self.direct_download:
                 url = self.queue.get()
                 if "www.googleapis.com/storage/v1/b" in url:
                     bucket = "/".join(url.split("/")[0:7])
@@ -259,8 +226,8 @@ class LeakyBuckets():
                         self.queue.put((account,guess))
                 else:
                     self.queue.put((guess,guess))
-        elif self.downloader:
-            for url in self.downloader:
+        elif self.direct_download:
+            for url in self.direct_download:
                 self.queue.put(url)
 
     def go(self):
@@ -272,39 +239,42 @@ class LeakyBuckets():
         except KeyboardInterrupt:
             print("\nTerminating...")
             self.alerts.append("Terminated early due to keyboard interrupt")
+        except Exception as ex:
+            print("\nTerminating...")
+            self.alerts.append(f"Terminated early due to unhandled exception: {ex}")
 
         return self.found
 
 
 if __name__ == "__main__":
-        
     import argparse
-    parser = argparse.ArgumentParser(description = "Find open storage buckets and accessible files across Amazon Web Services, Google Cloud, and Microsoft Azure simultaneously")
+    parser = argparse.ArgumentParser(
+        description = "Find open storage buckets and accessible files across Amazon Web Services, Google Cloud, and Microsoft Azure simultaneously",
+        epilog = '''
+Examples:
+  python3 leakyBuckets.py --keywords hooli
+  python3 leakyBuckets.py --keywords /path/to/keywords.txt --download --max-files 100 --max-size 10000
+  python3 leakyBuckets.py --guesses hooli-dev,hoolibucket,hoolicon_files
+  python3 leakyBuckets.py --keywords hooli --modifiers files,buckets,dev,staging,code
+  python3 leakyBuckets.py --direct-download https://hooli.blob.core.windows.net/container/hooli3.gif
+  python3 leakyBuckets.py --keywords hooli --modifiers /path/to/modifiers.txt --az-accounts hoolistorage,hooli_storage
+''',
+	formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument(
 		"--keywords",
 		required=False,
-		help="Keywords used to generate guesses. Can be a path to a wordlist file or a comma-separated list of words."
+		help="Keywords used to generate guesses. File path or comma-separated list."
 	)
     parser.add_argument(
-		"--modifiers",
-		required=False,
-		help="Used to modify keywords. Can be a path to a wordlist file or a comma-separated list of words.",
-        default="./modifiers.txt"
+    "--download",
+    required=False,
+    help="Automatically download discovered files.",
+    action="store_true"
 	)
     parser.add_argument(
 		"--guesses",
 		required=False,
-		help="Manually provide guesses. Can be a path to a wordlist file or a comma-separated list of words.",
-	)
-    parser.add_argument(
-		"--downloader",
-		required=False,
-		help="Provide URLs of files to download. Can be a path to a file or a comma-separated list of URLs.",
-	)
-    parser.add_argument(
-		"--az-accounts",
-		required=False,
-		help="Provide AZ storage accounts (defaults to either keywords or guesses, whichever is passed in). Can be a path to a wordlist file or a comma-separated list of words.",
+		help="Manually provide guesses (instead of relying on the tool). File path or comma-separated list.",
 	)
     parser.add_argument(
 		"--threads",
@@ -328,16 +298,26 @@ if __name__ == "__main__":
 		type=int
 	)
     parser.add_argument(
-    "--download",
-    required=False,
-    help="Automatically download discovered files.",
-    action="store_true"
+		"--modifiers",
+		required=False,
+		help="Used to modify keywords. File path or comma-separated list.",
+        default="./modifiers.txt"
+	)
+    parser.add_argument(
+		"--direct-download",
+		required=False,
+		help="Provide URLs of files to download. File path or comma-separated list.",
+	)
+    parser.add_argument(
+		"--az-accounts",
+		required=False,
+		help="Provide AZ storage accounts (defaults to passed-in keywords). File path or comma-separated list.",
 	)
     args = parser.parse_args()
 
     try:
         leakybuckets = LeakyBuckets(**vars(args))
-        if leakybuckets.downloader:
+        if leakybuckets.direct_download:
             print("Preparing downloads...")
         else:
             print("Preparing guesses...")
