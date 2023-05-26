@@ -2,6 +2,12 @@
 
 Find open storage buckets and accessible files across Amazon Web Services, Google Cloud, and Microsoft Azure simultaneously
 
+* One tool instead of three!
+* Auto-generate guesses from one or more passed-in keywords
+* Auto-download accessible files (with guard rails to protect disk space)
+* Customizable threading
+* Terrible name
+
 ![alt text](./demo.gif "Quick Demo")
 
 ## Install
@@ -11,8 +17,6 @@ Find open storage buckets and accessible files across Amazon Web Services, Googl
     pip install -r requirements.txt
 
 ## Use
-
-    Find open storage buckets and accessible files across Amazon Web Services, Google Cloud, and Microsoft Azure simultaneously
 
     optional arguments:
     -h, --help            show this help message and exit
