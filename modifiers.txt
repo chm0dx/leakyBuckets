@@ -25,3 +25,5 @@ bak
 backup
 test
 assets
+docs
+documents

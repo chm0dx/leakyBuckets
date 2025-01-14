@@ -4,7 +4,7 @@ import requests
 import shutil
 import threading
 import xml.etree.ElementTree as ET
-from google.cloud import storage
+
 from queue import Queue
 
 
@@ -20,6 +20,7 @@ class LeakyBuckets():
         self.alerts = []
         self.azure_storage_accounts = []
         self.__dict__.update(kwargs)
+        self.digitalocean_regions = ["nyc1","nyc2","nyc3","ams3","sfo2","sfo3","sgp1","lon1","fra1","tor1","blr1","syd1"]
 
         if not self.keywords and not self.guesses and not self.direct_download:
             self.error("Must provide one of the following: --keywords, --guesses, --direct-download")
@@ -63,8 +64,54 @@ class LeakyBuckets():
 
     def error(self, error):
         raise LeakyBucketsException(error)
+    
+    def guess_digitalocean(self,guess):
+        url = f"https://{guess}.digitaloceanspaces.com"
+        try:
+            r = requests.get(url)
+            if r.status_code == 404:
+                pass
+            elif r.status_code == 200:
+                files = [(f.text,"") for f in itertools.islice(ET.fromstring(r.text).iter('{http://s3.amazonaws.com/doc/2006-03-01/}Key'),self.max_files) if not f.text.endswith("/")]
+                self.found.append((url,files,"")) if len(files) > 0 else self.found.append((url,files, "The bucket exists but is empty."))
+                if self.download:
+                    for file,message in files:
+                        index = files.index((file,message))
+                        files.remove((file,message))
+                        file_url = f"{url}/{requests.utils.quote(file)}"
+                        (file,message) = self.download_file(file_url,url,file)
+                        files.insert(index,(file,message))
+                
+            else:
+                pass
+
+
+        except requests.exceptions.ConnectionError:
+            pass
 
     def guess_gcp(self,guess):
+
+        url = f"https://{guess}.storage.googleapis.com/"
+        r = requests.get(url)
+        if r.status_code == 404:
+            pass
+        elif r.status_code == 403:
+            if self.all:
+                self.found.append((url,[],"The bucket exists but you do not have access."))
+        elif r.status_code == 200:
+            files = [(f.text,"") for f in itertools.islice(ET.fromstring(r.text).iter('{http://doc.s3.amazonaws.com/2006-03-01}Key'),self.max_files) if not f.text.endswith("/")]
+            if self.download:
+                for file,message in files:
+                    index = files.index((file,message))
+                    files.remove((file,message))
+                    file_url = f"{url}{requests.utils.quote(file)}"
+                    (file,message) = self.download_file(file_url,url,file)
+                    files.insert(index,(file,message))
+            self.found.append((url,files,"")) if len(files) > 0 else self.found.append((url,files, "The bucket exists but is empty."))
+        else:
+            pass
+
+        """
         url = f"https://www.googleapis.com/storage/v1/b/{guess}"
         r = requests.get(f"{url}/iam/testPermissions?permissions=storage.buckets.delete&permissions=storage.buckets.get&permissions=storage.buckets.getIamPolicy&permissions=storage.buckets.setIamPolicy&permissions=storage.buckets.update&permissions=storage.objects.create&permissions=storage.objects.delete&permissions=storage.objects.get&permissions=storage.objects.list&permissions=storage.objects.update")
         if r.status_code == 404:
@@ -92,7 +139,7 @@ class LeakyBuckets():
                 if self.all:
                     self.found.append((url,[],"The bucket exists but you do not have access."))
         else:
-            pass
+            pass"""
 
     def guess_aws(self,guess):
         url = f"https://{guess}.s3.amazonaws.com/"
@@ -141,28 +188,21 @@ class LeakyBuckets():
         dl_folder = '/'.join(bucket.split("/")[2:]).replace("/","__")
         if dl_folder.endswith("__"):
             dl_folder = dl_folder[:-2]
-        if "www.googleapis.com/storage/v1/b" in url:
-            bucket_name = url.split("/")[6]
-            if storage.Client.create_anonymous_client().bucket(bucket_name).get_blob(file).size > self.max_size:
-                return (file,"Not saved: File larger than download limit")
-            else:
-                pathlib.Path(f"./{dl_folder}").mkdir(parents=True, exist_ok=True)
-                file_name = file.split("/")[-1]
-                storage.Client.create_anonymous_client().bucket(bucket_name).blob(file).download_to_filename(f"./{dl_folder}/{file_name}")
-                return (file,f"Saved to: ./{dl_folder}/{file_name}")
+        r = requests.get(url,stream=True)
+        if r.status_code == 403:
+            if "The billing account for the owning project is disabled in state closed" in r.text:
+                return (file, "Cannot download file (GCP billing account closed)")
+            return (file,"Not authorized to access file")
+        elif int(r.headers["Content-Length"]) > self.max_size:
+            return (file,"Not saved: File larger than download limit")
         else:
-            r = requests.head(url)
-            if r.status_code == 403:
-                return (file,"Not authorized to access file")
-            elif int(r.headers["Content-Length"]) > self.max_size:
-                return (file,"Not saved: File larger than download limit")
-            else:
-                with requests.get(url, stream=True) as r:
-                    pathlib.Path(f"./{dl_folder}").mkdir(parents=True, exist_ok=True)
-                    file_name = file.split("/")[-1]
-                    with open(f"./{dl_folder}/{file_name}", 'wb') as f:
-                        shutil.copyfileobj(r.raw, f)
-                    return (file_name,f"Saved to: ./{dl_folder}/{file_name}")
+            with requests.get(url, stream=True) as r:
+                pathlib.Path(f"./downloads/{dl_folder}").mkdir(parents=True, exist_ok=True)
+                file_name = file.split("/")[-1]
+                with open(f"./downloads/{dl_folder}/{file_name}", 'wb') as f:
+                    shutil.copyfileobj(r.raw, f)
+                #return (file_name,f"Saved to: ./{dl_folder}/{file_name}")
+                return (url,"Saved")
 
     def worker(self):
         while True:
@@ -171,17 +211,23 @@ class LeakyBuckets():
                 if self.alerts:
                     self.queue.task_done()
                     continue
-                if len(guess) == 1:
-                    self.guess_gcp(guess[0])
-                    self.guess_aws(guess[0])
+                if guess[0] == "digitalocean":
+                    self.guess_digitalocean(guess[1])
+                elif guess[0] == "aws/gcp":
+                    
+                    self.guess_gcp(guess[1])
+                    self.guess_aws(guess[1])
                 else:
-                    self.guess_azure(guess[0],guess[1])
+                    self.guess_azure(guess[1],guess[2])
             elif self.direct_download:
                 url = self.queue.get()
                 if "www.googleapis.com/storage/v1/b" in url:
                     bucket = "/".join(url.split("/")[0:7])
                     file = "/".join(url.split("/")[7:])
                 elif ".s3.amazonaws.com" in url:
+                    bucket = "/".join(url.split("/")[0:3])
+                    file = "/".join(url.split("/")[3:])
+                elif ".digitaloceanspaces.com" in url:
                     bucket = "/".join(url.split("/")[0:3])
                     file = "/".join(url.split("/")[3:])
                 elif ".blob.core.windows.net/" in url:
@@ -196,33 +242,45 @@ class LeakyBuckets():
     def prepare(self):    
         if self.keywords:
             for keyword in self.keywords:
-                self.queue.put([keyword])
-                self.queue.put([keyword,keyword])
+                self.queue.put(("aws/gcp",keyword))
+                self.queue.put(("azure",keyword,keyword))
+
+                for region in self.digitalocean_regions:
+                    self.queue.put(("digitalocean",f"{keyword}.{region}"))
+                
                 for modifier in self.modifiers:
-                    self.queue.put([f"{keyword}{modifier}"])
-                    self.queue.put([f"{modifier}{keyword}"])
-                    self.queue.put([f"{keyword}-{modifier}"])
-                    self.queue.put([f"{keyword}_{modifier}"])
-                    self.queue.put([f"{modifier}-{keyword}"])
-                    self.queue.put([f"{modifier}_{keyword}"])
+                    self.queue.put(("aws/gcp",f"{keyword}{modifier}"))
+                    self.queue.put(("aws/gcp",f"{modifier}{keyword}"))
+                    self.queue.put(("aws/gcp",f"{keyword}-{modifier}"))
+                    self.queue.put(("aws/gcp",f"{keyword}_{modifier}"))
+                    self.queue.put(("aws/gcp",f"{modifier}-{keyword}"))
+                    self.queue.put(("aws/gcp",f"{modifier}_{keyword}"))
+
+                    for region in self.digitalocean_regions:
+                        self.queue.put(("digitalocean",f"{keyword}{modifier}.{region}"))
+                        self.queue.put(("digitalocean",f"{modifier}{keyword}.{region}"))
+                        self.queue.put(("digitalocean",f"{keyword}-{modifier}.{region}"))
+                        self.queue.put(("digitalocean",f"{keyword}_{modifier}.{region}"))
+                        self.queue.put(("digitalocean",f"{modifier}-{keyword}.{region}"))
+                        self.queue.put(("digitalocean",f"{modifier}_{keyword}.{region}"))
 
                     if self.az_accounts:
                         for account in self.az_accounts:
-                            self.queue.put((account,modifier))
-                            self.queue.put((account,f"{keyword}{modifier}"))
-                            self.queue.put((account,f"{modifier}{keyword}"))
-                            self.queue.put((account,f"{keyword}-{modifier}"))
-                            self.queue.put((account,f"{keyword}_{modifier}"))
-                            self.queue.put((account,f"{modifier}-{keyword}"))
-                            self.queue.put((account,f"{modifier}_{keyword}"))
+                            self.queue.put(("azure",account,modifier))
+                            self.queue.put(("azure",account,f"{keyword}{modifier}"))
+                            self.queue.put(("azure",account,f"{modifier}{keyword}"))
+                            self.queue.put(("azure",account,f"{keyword}-{modifier}"))
+                            self.queue.put(("azure",account,f"{keyword}_{modifier}"))
+                            self.queue.put(("azure",account,f"{modifier}-{keyword}"))
+                            self.queue.put(("azure",account,f"{modifier}_{keyword}"))
                     else:
-                        self.queue.put((keyword,modifier))
-                        self.queue.put((keyword,f"{keyword}{modifier}"))
-                        self.queue.put((keyword,f"{modifier}{keyword}"))
-                        self.queue.put((keyword,f"{keyword}-{modifier}"))
-                        self.queue.put((keyword,f"{keyword}_{modifier}"))
-                        self.queue.put((keyword,f"{modifier}-{keyword}"))
-                        self.queue.put((keyword,f"{modifier}_{keyword}"))
+                        self.queue.put(("azure",keyword,modifier))
+                        self.queue.put(("azure",keyword,f"{keyword}{modifier}"))
+                        self.queue.put(("azure",keyword,f"{modifier}{keyword}"))
+                        self.queue.put(("azure",keyword,f"{keyword}-{modifier}"))
+                        self.queue.put(("azure",keyword,f"{keyword}_{modifier}"))
+                        self.queue.put(("azure",keyword,f"{modifier}-{keyword}"))
+                        self.queue.put(("azure",keyword,f"{modifier}_{keyword}"))
         elif self.guesses:
             for guess in self.guesses:
                 self.queue.put([guess])
@@ -348,7 +406,7 @@ Examples:
                     print(f"\t{message}")
                 else:
                     for file,message in files:
-                        print(f"\t{file}\t({message})") if message else print(f"\t{file}")
+                        print(f"\t{url}{'/' if not url.endswith('/') else ''}{file}\t({message})") if message else print(f"\t{url}{'/' if not url.endswith('/') else ''}{file}")
                     if len(files) == leakybuckets.max_files:
                         print(f"\t*** Hit max of {leakybuckets.max_files} objects to enumerate per source. There may be more!")
         for alert in leakybuckets.alerts:
@@ -356,3 +414,5 @@ Examples:
 
     except LeakyBucketsException as ex:
         print(ex)
+
+    print()
