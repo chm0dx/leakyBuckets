@@ -312,7 +312,7 @@ class LeakyBuckets():
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(
-        description = "Find open storage buckets and accessible files across Amazon Web Services, Google Cloud, and Microsoft Azure simultaneously",
+        description = "Find open storage buckets and accessible files across Amazon Web Services, Google Cloud, Microsoft Azure, and Digital Ocean simultaneously",
         epilog = '''
 Examples:
   python3 leakyBuckets.py --keywords hooli

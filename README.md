@@ -1,6 +1,6 @@
 # leakyBuckets
 
-Find open storage buckets and accessible files across Amazon Web Services, Google Cloud, and Microsoft Azure simultaneously
+Find open storage buckets and accessible files across Amazon Web Services, Google Cloud, Microsoft Azure, and Digital Ocean simultaneously
 
 * One tool instead of three!
 * Auto-generate guesses from one or more passed-in keywords
