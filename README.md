@@ -2,7 +2,7 @@
 
 Find open storage buckets and accessible files across Amazon Web Services, Google Cloud, Microsoft Azure, and Digital Ocean simultaneously
 
-* One tool instead of three!
+* One tool instead of four!
 * Auto-generate guesses from one or more passed-in keywords
 * Auto-download accessible files (with guard rails to protect disk space)
 * Customizable threading
