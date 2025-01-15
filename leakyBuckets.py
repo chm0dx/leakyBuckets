@@ -86,29 +86,32 @@ class LeakyBuckets():
                 pass
 
 
-        except requests.exceptions.ConnectionError:
+        except requests.exceptions.ConnectionError or requests.exceptions.SSLError:
             pass
 
     def guess_gcp(self,guess):
 
         url = f"https://{guess}.storage.googleapis.com/"
-        r = requests.get(url)
-        if r.status_code == 404:
-            pass
-        elif r.status_code == 403:
-            if self.all:
-                self.found.append((url,[],"The bucket exists but you do not have access."))
-        elif r.status_code == 200:
-            files = [(f.text,"") for f in itertools.islice(ET.fromstring(r.text).iter('{http://doc.s3.amazonaws.com/2006-03-01}Key'),self.max_files) if not f.text.endswith("/")]
-            if self.download:
-                for file,message in files:
-                    index = files.index((file,message))
-                    files.remove((file,message))
-                    file_url = f"{url}{requests.utils.quote(file)}"
-                    (file,message) = self.download_file(file_url,url,file)
-                    files.insert(index,(file,message))
-            self.found.append((url,files,"")) if len(files) > 0 else self.found.append((url,files, "The bucket exists but is empty."))
-        else:
+        try:
+            r = requests.get(url)
+            if r.status_code == 404:
+                pass
+            elif r.status_code == 403:
+                if self.all:
+                    self.found.append((url,[],"The bucket exists but you do not have access."))
+            elif r.status_code == 200:
+                files = [(f.text,"") for f in itertools.islice(ET.fromstring(r.text).iter('{http://doc.s3.amazonaws.com/2006-03-01}Key'),self.max_files) if not f.text.endswith("/")]
+                if self.download:
+                    for file,message in files:
+                        index = files.index((file,message))
+                        files.remove((file,message))
+                        file_url = f"{url}{requests.utils.quote(file)}"
+                        (file,message) = self.download_file(file_url,url,file)
+                        files.insert(index,(file,message))
+                self.found.append((url,files,"")) if len(files) > 0 else self.found.append((url,files, "The bucket exists but is empty."))
+            else:
+                pass
+        except requests.exceptions.ConnectionError or requests.exceptions.SSLError:
             pass
 
         """
@@ -142,24 +145,27 @@ class LeakyBuckets():
             pass"""
 
     def guess_aws(self,guess):
-        url = f"https://{guess}.s3.amazonaws.com/"
-        r = requests.get(url)
-        if r.status_code == 404:
-            pass
-        elif r.status_code == 403:
-            if self.all:
-                self.found.append((url,[],"The bucket exists but you do not have access."))
-        elif r.status_code == 200:
-            files = [(f.text,"") for f in itertools.islice(ET.fromstring(r.text).iter('{http://s3.amazonaws.com/doc/2006-03-01/}Key'),self.max_files) if not f.text.endswith("/")]
-            if self.download:
-                for file,message in files:
-                    index = files.index((file,message))
-                    files.remove((file,message))
-                    file_url = f"{url}{requests.utils.quote(file)}"
-                    (file,message) = self.download_file(file_url,url,file)
-                    files.insert(index,(file,message))
-            self.found.append((url,files,"")) if len(files) > 0 else self.found.append((url,files, "The bucket exists but is empty."))
-        else:
+        try:            
+            url = f"https://{guess}.s3.amazonaws.com/"
+            r = requests.get(url)
+            if r.status_code == 404:
+                pass
+            elif r.status_code == 403:
+                if self.all:
+                    self.found.append((url,[],"The bucket exists but you do not have access."))
+            elif r.status_code == 200:
+                files = [(f.text,"") for f in itertools.islice(ET.fromstring(r.text).iter('{http://s3.amazonaws.com/doc/2006-03-01/}Key'),self.max_files) if not f.text.endswith("/")]
+                if self.download:
+                    for file,message in files:
+                        index = files.index((file,message))
+                        files.remove((file,message))
+                        file_url = f"{url}{requests.utils.quote(file)}"
+                        (file,message) = self.download_file(file_url,url,file)
+                        files.insert(index,(file,message))
+                self.found.append((url,files,"")) if len(files) > 0 else self.found.append((url,files, "The bucket exists but is empty."))
+            else:
+                pass
+        except requests.exceptions.ConnectionError or requests.exceptions.SSLError:
             pass
 
     def guess_azure(self,keyword,guess):
@@ -181,7 +187,7 @@ class LeakyBuckets():
                         (file,message) = self.download_file(file_url,url,file)
                         files.insert(index,(file,message))
                 self.found.append((url,files,"")) if len(files) > 0 else self.found.append((url,files, "The container exists but is empty."))
-        except requests.exceptions.ConnectionError:
+        except requests.exceptions.ConnectionError or requests.exceptions.SSLError:
             pass
 
     def download_file(self,url,bucket,file):
